@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Register Passkey</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    #status { margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Register Passkey (Face ID)</h1>
+  <button id="register">Register with Face ID</button>
+  <div id="status"></div>
+
+  <script>
+    function base64ToUint8Array(base64) {
+      const binary = atob(base64);
+      return new Uint8Array([...binary].map(c => c.charCodeAt(0)));
+    }
+
+    function arrayBufferToBase64(buffer) {
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    }
+
+    document.getElementById("register").onclick = async () => {
+      try {
+        const publicKey = {
+          challenge: base64ToUint8Array("QUJDREVGR0g="), // mock
+          rp: { name: "Locker", id: "29755a3ecaee.ngrok-free.app" }, // update with your ngrok domain
+          user: {
+            id: base64ToUint8Array("dXNlcmlk"), // "userid"
+            name: "testuser",
+            displayName: "Test User"
+          },
+          pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+          authenticatorSelection: { userVerification: "preferred" },
+          timeout: 60000,
+          attestation: "none"
+        };
+
+        const cred = await navigator.credentials.create({ publicKey });
+        document.getElementById("status").textContent = "✅ Passkey registered!";
+        console.log("Credential ID (base64):", arrayBufferToBase64(cred.rawId));
+      } catch (err) {
+        document.getElementById("status").textContent = "❌ Error: " + err.message;
+      }
+    };
+  </script>
+</body>
+</html>
