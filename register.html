@@ -25,7 +25,6 @@
     }
 
     document.getElementById("register").onclick = async () => {
-      try {
         const publicKey = {
           challenge: base64ToUint8Array("cHJlc2V0LWhhcmQtc2lnbg"), // "preset-hard-sign"
           rp: { name: "Locker", id: "f9873d033355.ngrok-free.app" },
@@ -52,9 +51,6 @@
         });
 
         document.getElementById("status").textContent = "✅ Credential saved!";
-      } catch (err) {
-        document.getElementById("status").textContent = "❌ " + err.message;
-      }
     };
   </script>
 </body>
