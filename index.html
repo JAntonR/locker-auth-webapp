@@ -1,22 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
+  <title>Smart Locker Login</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Phone Locker Auth</title>
   <style>
     body { font-family: sans-serif; margin: 2em; }
-    #status { font-size: 1.2em; }
-    .success { color: green; }
-    .error { color: red; }
+    #status { margin-top: 1em; }
   </style>
 </head>
 <body>
-  <h1>Locker Authentication</h1>
-  <div id="status">Waiting for locker proximity...</div>
+  <h1>Smart Locker Login</h1>
+  <div id="status">⏳ Waiting for locker signal...</div>
 
   <script>
-    const LOCKER_URL = "https://f9873d033355.ngrok-free.app"; // ← update your ngrok domain
+    const LOCKER_URL = "https://f9873d033355.ngrok-free.app"; // Your ngrok address
 
     function base64ToUint8Array(base64) {
       const padding = '='.repeat((4 - (base64.length % 4)) % 4);
@@ -29,60 +26,57 @@
       return outputArray;
     }
 
-    function arrayBufferToBase64(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)));
-    }
+    async function pollTriggerAndLogin() {
+      const statusEl = document.getElementById("status");
 
-    async function pollTrigger() {
-      try {
-        const res = await fetch(`${LOCKER_URL}/trigger-auth`);
-        const data = await res.json();
+      while (true) {
+        try {
+          const res = await fetch(`${LOCKER_URL}/trigger-auth`);
+          const data = await res.json();
 
-        if (data.trigger) {
-          document.getElementById("status").textContent = "🔓 In range. Prompting Face ID...";
-          await startWebAuthn();
-        } else {
-          document.getElementById("status").textContent = "Waiting for locker proximity...";
+          if (data.trigger) {
+            statusEl.textContent = "🔓 Face ID required...";
+            const challengeRes = await fetch(`${LOCKER_URL}/login-challenge`);
+            const challengeData = await challengeRes.json();
+
+            // Convert challenge and credential ID to Uint8Array
+            const challenge = base64ToUint8Array(challengeData.publicKey.challenge);
+            const allowCred = challengeData.publicKey.allowCredentials[0];
+            const credId = base64ToUint8Array(allowCred.id);
+
+            const publicKey = {
+              ...challengeData.publicKey,
+              challenge: challenge,
+              allowCredentials: [{
+                ...allowCred,
+                id: credId
+              }]
+            };
+
+            const assertion = await navigator.credentials.get({ publicKey });
+
+            const rawIdBase64 = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
+
+            await fetch(`${LOCKER_URL}/verify-assertion`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: rawIdBase64 })
+            });
+
+            statusEl.textContent = "✅ Unlocked!";
+            return;
+          } else {
+            statusEl.textContent = "⏳ Waiting for locker signal...";
+          }
+        } catch (err) {
+          statusEl.textContent = "❌ Error: " + err.message;
         }
-      } catch (err) {
-        document.getElementById("status").textContent = "❌ Error polling: " + err.message;
+
+        await new Promise(r => setTimeout(r, 3000));
       }
     }
 
-    async function startWebAuthn() {
-      try {
-        const res = await fetch(`${LOCKER_URL}/login-challenge`);
-        const { publicKey } = await res.json();
-
-        publicKey.challenge = base64ToUint8Array(publicKey.challenge);
-        publicKey.allowCredentials.forEach(cred => {
-          cred.id = base64ToUint8Array(cred.id);
-        });
-
-        const assertion = await navigator.credentials.get({ publicKey });
-        const id = arrayBufferToBase64(assertion.rawId);
-
-        const verifyRes = await fetch(`${LOCKER_URL}/verify-assertion`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id })
-        });
-
-        if (verifyRes.ok) {
-          document.getElementById("status").textContent = "✅ Face ID verified. Locker unlocked!";
-          document.getElementById("status").className = "success";
-        } else {
-          document.getElementById("status").textContent = "❌ Authentication failed.";
-          document.getElementById("status").className = "error";
-        }
-      } catch (err) {
-        document.getElementById("status").textContent = "❌ Auth error: " + err.message;
-        document.getElementById("status").className = "error";
-      }
-    }
-
-    setInterval(pollTrigger, 3000);
-    pollTrigger();
+    pollTriggerAndLogin();
   </script>
 </body>
 </html>
