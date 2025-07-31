@@ -14,7 +14,8 @@
   <div id="status"></div>
 
   <script>
-    // Proper base64 (URL-safe aware) → Uint8Array converter
+    const LOCKER_URL = "https://f9873d033355.ngrok-free.app"; // Update this to match your ngrok
+
     function base64ToUint8Array(base64) {
       const padding = '='.repeat((4 - (base64.length % 4)) % 4);
       const base64Safe = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -34,9 +35,9 @@
       try {
         const publicKey = {
           challenge: base64ToUint8Array("QUJDREVGR0g="), // mock challenge
-          rp: { name: "Locker", id: "https://f9873d033355.ngrok-free.app" }, // update your ngrok domain here
+          rp: { name: "Locker", id: "f9873d033355.ngrok-free.app" },
           user: {
-            id: base64ToUint8Array("dXNlcmlk"), // base64 "userid"
+            id: base64ToUint8Array("dXNlcmlk"), // "userid"
             name: "testuser",
             displayName: "Test User"
           },
@@ -47,8 +48,17 @@
         };
 
         const cred = await navigator.credentials.create({ publicKey });
+
+        const credentialIdBase64 = arrayBufferToBase64(cred.rawId);
         document.getElementById("status").textContent = "✅ Passkey registered!";
-        console.log("Credential ID (base64):", arrayBufferToBase64(cred.rawId));
+
+        await fetch(`${LOCKER_URL}/store-credential`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: credentialIdBase64 })
+        });
+
+        console.log("Credential ID stored:", credentialIdBase64);
       } catch (err) {
         document.getElementById("status").textContent = "❌ Error: " + err.message;
       }
