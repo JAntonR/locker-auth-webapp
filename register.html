@@ -3,41 +3,34 @@
 <head>
   <title>Register Passkey</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: sans-serif; margin: 2em; }
-    #status { margin-top: 1em; }
-  </style>
 </head>
 <body>
-  <h1>Register Passkey (Face ID)</h1>
+  <h1>Register Passkey</h1>
   <button id="register">Register with Face ID</button>
   <div id="status"></div>
 
   <script>
-    const LOCKER_URL = "https://f9873d033355.ngrok-free.app"; // Update this to match your ngrok
-
-    function base64ToUint8Array(base64) {
-      const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-      const base64Safe = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-      const rawData = atob(base64Safe);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
-      return outputArray;
+    function base64urlEncode(buf) {
+      return btoa(String.fromCharCode(...new Uint8Array(buf)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
     }
 
-    function arrayBufferToBase64(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    function base64ToUint8Array(base64) {
+      const padding = "=".repeat((4 - base64.length % 4) % 4);
+      const base64Fixed = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const rawData = atob(base64Fixed);
+      return new Uint8Array([...rawData].map(c => c.charCodeAt(0)));
     }
 
     document.getElementById("register").onclick = async () => {
       try {
         const publicKey = {
-          challenge: base64ToUint8Array("QUJDREVGR0g="), // mock challenge
+          challenge: base64ToUint8Array("cHJlc2V0LWhhcmQtc2lnbg"), // "preset-hard-sign"
           rp: { name: "Locker", id: "f9873d033355.ngrok-free.app" },
           user: {
-            id: base64ToUint8Array("dXNlcmlk"), // "userid"
+            id: base64ToUint8Array("dXNlcjEyMw"), // "user123"
             name: "testuser",
             displayName: "Test User"
           },
@@ -48,19 +41,19 @@
         };
 
         const cred = await navigator.credentials.create({ publicKey });
+        const rawId = base64urlEncode(cred.rawId);
 
-        const credentialIdBase64 = arrayBufferToBase64(cred.rawId);
-        document.getElementById("status").textContent = "✅ Passkey registered!";
+        document.getElementById("status").textContent = "✅ Registered. Sending ID to locker...";
 
-        await fetch(`${LOCKER_URL}/store-credential`, {
+        await fetch("https://f9873d033355.ngrok-free.app/store-credential", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: credentialIdBase64 })
+          body: JSON.stringify({ rawId })
         });
 
-        console.log("Credential ID stored:", credentialIdBase64);
+        document.getElementById("status").textContent = "✅ Credential saved!";
       } catch (err) {
-        document.getElementById("status").textContent = "❌ Error: " + err.message;
+        document.getElementById("status").textContent = "❌ " + err.message;
       }
     };
   </script>

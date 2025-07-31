@@ -15,15 +15,13 @@
   <script>
     const LOCKER_URL = "https://f9873d033355.ngrok-free.app"; // Your ngrok address
 
-    function base64ToUint8Array(base64) {
-      const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-      const base64Safe = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-      const rawData = atob(base64Safe);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
-      return outputArray;
+    function base64urlToUint8Array(base64urlString) {
+      const padding = '='.repeat((4 - (base64urlString.length % 4)) % 4);
+      const base64 = (base64urlString + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+      const rawData = atob(base64);
+      return new Uint8Array([...rawData].map(c => c.charCodeAt(0)));
     }
 
     async function pollTriggerAndLogin() {
@@ -39,14 +37,18 @@
             const challengeRes = await fetch(`${LOCKER_URL}/login-challenge`);
             const challengeData = await challengeRes.json();
 
-            // Convert challenge and credential ID to Uint8Array
-            const challenge = base64ToUint8Array(challengeData.publicKey.challenge);
+            if (challengeData.error) {
+              statusEl.textContent = "❌ " + challengeData.error;
+              return;
+            }
+
+            const challenge = base64urlToUint8Array(challengeData.publicKey.challenge);
             const allowCred = challengeData.publicKey.allowCredentials[0];
-            const credId = base64ToUint8Array(allowCred.id);
+            const credId = base64urlToUint8Array(allowCred.id);
 
             const publicKey = {
               ...challengeData.publicKey,
-              challenge: challenge,
+              challenge,
               allowCredentials: [{
                 ...allowCred,
                 id: credId
@@ -55,12 +57,15 @@
 
             const assertion = await navigator.credentials.get({ publicKey });
 
-            const rawIdBase64 = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
+            const rawIdBase64url = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)))
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/, "");
 
             await fetch(`${LOCKER_URL}/verify-assertion`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: rawIdBase64 })
+              body: JSON.stringify({ id: rawIdBase64url })
             });
 
             statusEl.textContent = "✅ Unlocked!";
@@ -78,5 +83,4 @@
 
     pollTriggerAndLogin();
   </script>
-</body>
-</html>
+</bo
