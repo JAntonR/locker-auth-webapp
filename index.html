@@ -3,40 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Phone Authenticator</title>
+  <title>Phone Locker Auth</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 2em; }
-    #status { font-size: 1.2em; margin-top: 1em; }
+    body { font-family: sans-serif; margin: 2em; }
+    #status { font-size: 1.2em; }
     .success { color: green; }
     .error { color: red; }
   </style>
 </head>
 <body>
   <h1>Locker Authentication</h1>
-  <div id="status">Waiting for locker trigger...</div>
+  <div id="status">Waiting for locker...</div>
 
   <script>
-    // Replace this with your locker server's ngrok HTTPS URL
-    const LOCKER_URL = "https://29755a3ecaee.ngrok-free.app";
+    const LOCKER_URL = "https://29755a3ecaee.ngrok-free.app"; // Replace with your ngrok HTTPS
 
-    // Poll every 3 seconds to check if locker triggered auth
-    async function pollTrigger() {
-      try {
-        const res = await fetch(`${LOCKER_URL}/trigger-auth`);
-        const data = await res.json();
-
-        if (data.trigger === true) {
-          document.getElementById('status').textContent = "Locker in range! Starting Face ID...";
-          await startWebAuthn();
-        } else {
-          document.getElementById('status').textContent = "Waiting for locker trigger...";
-        }
-      } catch (err) {
-        document.getElementById('status').textContent = "Error polling locker: " + err.message;
-      }
-    }
-
-    // Convert base64 string to Uint8Array
     function base64ToUint8Array(base64) {
       const binary = atob(base64);
       const bytes = new Uint8Array(binary.length);
@@ -46,55 +27,59 @@
       return bytes;
     }
 
-    // Convert ArrayBuffer to base64
     function arrayBufferToBase64(buffer) {
       const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      return btoa(String.fromCharCode(...bytes));
+    }
+
+    async function pollTrigger() {
+      try {
+        const res = await fetch(`${LOCKER_URL}/trigger-auth`);
+        const data = await res.json();
+
+        if (data.trigger) {
+          document.getElementById("status").textContent = "🔓 Locker in range! Triggering Face ID...";
+          await startWebAuthn();
+        } else {
+          document.getElementById("status").textContent = "Waiting for locker...";
+        }
+      } catch (err) {
+        document.getElementById("status").textContent = "❌ Error polling: " + err.message;
       }
-      return btoa(binary);
     }
 
     async function startWebAuthn() {
       try {
-        // Get login challenge from locker
-        const challengeRes = await fetch(`${LOCKER_URL}/login-challenge`);
-        const { publicKey } = await challengeRes.json();
+        const res = await fetch(`${LOCKER_URL}/login-challenge`);
+        const { publicKey } = await res.json();
 
-        // Decode challenge and credential IDs
         publicKey.challenge = base64ToUint8Array(publicKey.challenge);
         publicKey.allowCredentials.forEach(cred => {
           cred.id = base64ToUint8Array(cred.id);
         });
 
-        // Prompt Face ID on iPhone
         const assertion = await navigator.credentials.get({ publicKey });
+        const id = arrayBufferToBase64(assertion.rawId);
 
-        // Prepare data to send back
-        const credentialId = arrayBufferToBase64(assertion.rawId);
-
-        // Send assertion to locker to verify
         const verifyRes = await fetch(`${LOCKER_URL}/verify-assertion`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: credentialId })
+          body: JSON.stringify({ id })
         });
 
         if (verifyRes.ok) {
-          document.getElementById('status').textContent = "✅ Authentication successful! You may open the locker.";
-          document.getElementById('status').className = "success";
+          document.getElementById("status").textContent = "✅ Authenticated! Locker is now open.";
+          document.getElementById("status").className = "success";
         } else {
-          document.getElementById('status').textContent = "❌ Authentication failed.";
-          document.getElementById('status').className = "error";
+          document.getElementById("status").textContent = "❌ Authentication failed.";
+          document.getElementById("status").className = "error";
         }
       } catch (err) {
-        document.getElementById('status').textContent = "Error during authentication: " + err.message;
-        document.getElementById('status').className = "error";
+        document.getElementById("status").textContent = "❌ Auth error: " + err.message;
+        document.getElementById("status").className = "error";
       }
     }
 
-    // Poll locker for trigger every 3 seconds
     setInterval(pollTrigger, 3000);
     pollTrigger();
   </script>
