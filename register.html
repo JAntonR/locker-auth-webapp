@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>Register Passkey</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: sans-serif; margin: 2em; }
     #status { margin-top: 1em; }
@@ -14,9 +14,16 @@
   <div id="status"></div>
 
   <script>
+    // Proper base64 (URL-safe aware) → Uint8Array converter
     function base64ToUint8Array(base64) {
-      const binary = atob(base64);
-      return new Uint8Array([...binary].map(c => c.charCodeAt(0)));
+      const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+      const base64Safe = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = atob(base64Safe);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
     }
 
     function arrayBufferToBase64(buffer) {
@@ -26,10 +33,10 @@
     document.getElementById("register").onclick = async () => {
       try {
         const publicKey = {
-          challenge: base64ToUint8Array("QUJDREVGR0g="), // mock
-          rp: { name: "Locker", id: "https://f9873d033355.ngrok-free.app" }, // update with your ngrok domain
+          challenge: base64ToUint8Array("QUJDREVGR0g="), // mock challenge
+          rp: { name: "Locker", id: "https://f9873d033355.ngrok-free.app" }, // update your ngrok domain here
           user: {
-            id: base64ToUint8Array("dXNlcmlk"), // "userid"
+            id: base64ToUint8Array("dXNlcmlk"), // base64 "userid"
             name: "testuser",
             displayName: "Test User"
           },
